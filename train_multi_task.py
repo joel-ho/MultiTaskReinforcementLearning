@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 import pickle
 import numpy as np
@@ -6,8 +7,6 @@ import matplotlib.pyplot as plt
 from function_approximator import Actor, Critic
 from experience_bank import ExperienceBank
 from wrapped_env import CartPoleCustom, AcrobotCustom
-
-np.random.seed(0)
 
 # Settings
 gamma = 0.99
@@ -62,6 +61,12 @@ def poisson(lam, minimum=1, maximum=10):
 def get_n_replay(lam):
   minimum, maximum, p = poisson(lam)
   return np.random.choice(np.arange(minimum, maximum+1), 1, p=p)[0]
+
+# Create folder to store output
+try:
+  os.makedirs(os.path.join('multi_task_results'))
+except:
+  pass
   
 # Training loop
 r_all = [np.zeros((n_episodes, )), np.zeros((n_episodes, ))]
@@ -173,13 +178,13 @@ for i_episode in range(n_episodes):
     
   if np.mod(i_episode+1, n_episodes_task_switch)==0:
     print('Episode {}, env_0_r_avg {}, env_1_r_avg {}, training {}'.format(i_episode+1, r_all_avg[0][i_episode], r_all_avg[1][i_episode], i_train))
-    with open(('multi_task_data\\agent_%07d.p'%(i_episode+1)), 'wb') as f:
+    with open(os.path.join('multi_task_results', 'agent_{:07d}.p'.format(i_episode+1)), 'wb') as f:
       pickle.dump([func_pi, func_V], f)
-    with open(('residuals_%07d.p'%(i_episode+1)), 'wb') as f:
+    with open(os.path.join('multi_task_results', 'residuals_{:07d}.p'.format(i_episode+1)), 'wb') as f:
       pickle.dump([r_all, r_all_avg], f)
       
   if np.mod(i_episode+1, 2*n_episodes_task_switch)==0:
-    with open('multi_task_data\\exp_bank.p', 'wb') as f:
+    with open(os.path.join('multi_task_results', 'exp_bank.p'), 'wb') as f:
       pickle.dump(exp, f)
   
 envs[0].close()

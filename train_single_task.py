@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 import pickle
 import numpy as np
@@ -18,7 +19,7 @@ value_clone_coeff = 0.005
 
 n_episodes = 1500
 r_avg_window = 50
-save_agent_interval = 500
+save_agent_interval = 100
 
 # Environment
 env = gym.make('CartPole-v0')
@@ -59,6 +60,11 @@ def poisson(lam, minimum=1, maximum=8):
 def get_n_replay(lam):
   minimum, maximum, p = poisson(lam)
   return np.random.choice(np.arange(minimum, maximum+1), 1, p=p)[0]
+
+try:
+  os.makedirs(os.path.join('single_task_results'))
+except:
+  pass
 
 # Training loop
 r_all = np.zeros((n_episodes, ))
@@ -137,7 +143,7 @@ for i_episode in range(n_episodes):
   if np.mod(i_episode+1, 100)==0:
     print('Episode {}, r_avg {}'.format(i_episode+1, r_all_avg[i_episode]))
   if np.mod(i_episode+1, save_agent_interval)==0:
-    with open(('single_task_data\\agent_%07d.p'%(i_episode+1)), 'wb') as f:
+    with open(os.path.join('single_task_data', 'agent_{:07d}.p'.format(i_episode+1)), 'wb') as f:
       pickle.dump([func_pi, func_V], f)
   
 env.close()

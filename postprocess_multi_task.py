@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 import pickle
 import numpy as np
@@ -10,7 +11,12 @@ from wrapped_env import CartPoleCustom, AcrobotCustom
 
 n_episodes = 4000
 
-with open('multi_task_data\\agent_{:07d}.p'.format(n_episodes), 'rb') as f:
+try:
+  os.makedirs(os.path.join('multi_task_results', 'gifs'))
+except:
+  pass
+  
+with open(os.path.join('multi_task_results', 'agent_{:07d}.p'.format(n_episodes)), 'rb') as f:
   agent = pickle.load(f)
 env = [CartPoleCustom(), AcrobotCustom()]
 env_frames = []
@@ -20,7 +26,7 @@ for i_env in range(2):
     env_frames[i_env].append([])
     s = env[i_env].reset()
     r_all = 0
-    gif_name = 'multi_task_data\\gifs\\env{:d}_test{:d}.gif'.format(i_env, i_test)
+    gif_name = os.path.join('multi_task_results', 'gifs', 'env{:d}_test{:d}.gif'.format(i_env, i_test))
     with imageio.get_writer(gif_name, mode='I', duration=0.02) as writer:
       for i_step in range(200):
         pi = agent[0].predict(s[np.newaxis])
@@ -36,7 +42,7 @@ for i_env in range(2):
       print('env: {}, r: {}'.format(i_env, r_all))
       env[i_env].close()
 
-with open('multi_task_data\\residuals_{:07d}.p'.format(n_episodes), 'rb') as f:
+with open(os.path.join('multi_task_results', 'residuals_{:07d}.p'.format(n_episodes)), 'rb') as f:
   res, res_avg = pickle.load(f)
 
 labs = ('Cartpole', 'Acrobot')

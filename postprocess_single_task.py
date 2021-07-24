@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 import pickle
 import numpy as np
@@ -11,14 +12,19 @@ from wrapped_env import CartPoleCustom, AcrobotCustom
 
 n_episodes = 1500
 
-with open('single_task_data\\agent_{:07d}.p'.format(n_episodes), 'rb') as f:
+try:
+  os.makedirs(os.path.join('single_task_results', 'gifs'))
+except:
+  pass
+
+with open(os.path.join('single_task_results', 'agent_{:07d}.p'.format(n_episodes)), 'rb') as f:
   agent = pickle.load(f)
 env = gym.make('CartPole-v0')
 
 for i_test in range(5):
   s = env.reset()
   r_all = 0
-  gif_name = 'single_task_data\\gifs\\test{:d}.gif'.format(i_test)
+  gif_name = os.path.join('single_task_results', 'gifs', 'test{:d}.gif'.format(i_test))
   with imageio.get_writer(gif_name, mode='I', duration=0.02) as writer:
     for i_step in range(200):
       pi = agent[0].predict(s[np.newaxis])
