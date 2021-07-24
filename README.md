@@ -1,7 +1,6 @@
 # MultiTaskReinforcementLearning
 Multi task reinforcement learning using CLEAR algorithm.
 
-![cartpole sample gif](https://github.com/joel-ho/MultiTaskReinforcementLearning/blob/main/sample_img/cartpole_sample.gif "Cartpole")
+<img src='sample_img/cartpole_sample.gif' height=250> <img src='sample_img/acrobot_sample.gif' height=250>
 
-![training sample result](https://github.com/joel-ho/MultiTaskReinforcementLearning/blob/main/sample_img/training_sample.png "Training")
-
+<img src='sample_img/training_sample.png' width=600>
