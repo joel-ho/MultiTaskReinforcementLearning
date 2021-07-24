@@ -1,5 +1,8 @@
 __pycache__
+*_results
 *.pyc
 *.pyd
 *.p
 *.gif
+*.png
+!*_sample.*
