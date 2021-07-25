@@ -7,19 +7,28 @@ import matplotlib.pyplot as plt
 from function_approximator import Actor, Critic
 from experience_bank import ExperienceBank
 from wrapped_env import CartPoleCustom, AcrobotCustom
+from utility_functions import *
 
-# Settings
-gamma = 0.99
-n_td_steps = 2
-replay_ratio = 4
-n_episodes_task_switch = 500
+##############
+### Inputs ###
+##############
 
-entropy_coeff = 0.01
-policy_clone_coeff = 0.005
-value_clone_coeff = 0.001
+gamma = 0.99                  # Discount factor
+n_td_steps = 2                # n TD steps
+replay_ratio = 4              # Number of replayed traj for every new traj 
+n_episodes_task_switch = 500  # Number of episodes between env switch when training (sequentially)
 
-n_episodes = 4000
-r_avg_window = 100
+entropy_coeff = 0.01       # Entropy regularisation for cross entropy loss
+policy_clone_coeff = 0.005 # Amount to penalise when diverging from experience policy (during off-policy training)
+value_clone_coeff = 0.001  # Amount to penalise when diverging from experience value function
+
+n_episodes = 4000   # Number of episodes to train for
+r_avg_window = 100  # Averaging window when calculating score
+
+
+##############
+### Script ###
+##############
 
 # Environments
 envs = [CartPoleCustom(), AcrobotCustom()]
@@ -47,21 +56,6 @@ func_V = Critic(
 # Experience
 exp = ExperienceBank(int(1e7), n_td_steps, n_states, n_actions)
 
-# Poisson distr
-def poisson(lam, minimum=1, maximum=10):
-  p = lam**np.arange(minimum, maximum+1)*np.exp(-lam)
-  fac = np.math.factorial(minimum-1)
-  for i, k in enumerate(range(minimum, maximum+1)):
-    fac *= k
-    p[i] /= fac
-  delta = 1-np.sum(p)
-  p += delta/(maximum+1-minimum)
-  return minimum, maximum, p
-  
-def get_n_replay(lam):
-  minimum, maximum, p = poisson(lam)
-  return np.random.choice(np.arange(minimum, maximum+1), 1, p=p)[0]
-
 # Create folder to store output
 try:
   os.makedirs(os.path.join('multi_task_results'))
@@ -79,10 +73,7 @@ for i_episode in range(n_episodes):
   env_train = envs[i_train]
   env_test = envs[i_test]
   
-  #############
-  ### Train ###
-  #############
-  
+  ### Train
   # Initialize state
   s = env_train.reset()
 
@@ -98,16 +89,18 @@ for i_episode in range(n_episodes):
     # Store in experience bank
     exp.write_sequentially(s, a, r, pi[0, :], V, s_prime, done)
     
-    # Accumulate gradients
+    # Accumulate gradients after n TD steps
     if np.mod(i_time+1, n_td_steps) == 0:
       n_replay = get_n_replay(replay_ratio) # Int
       i_on_policy = [exp.get_latest_idx(), ] # List
       i_off_policy = list(exp.get_sample_idx(n_replay)) # List
       
       # Sample experience
-      for i_exp in i_on_policy+i_off_policy:
+      for i_exp, exp_idx in enumerate(i_on_policy+i_off_policy):
       
-        exp_s, exp_a, exp_r, exp_mu, exp_V, exp_s_prime, exp_terminal, exp_k = exp.get_traj(i_exp)
+        # Get trajectory from experience bank 
+        # When i_exp=0, latest on-policy trajectory will be retrieved
+        exp_s, exp_a, exp_r, exp_mu, exp_V, exp_s_prime, exp_terminal, exp_k = exp.get_traj(exp_idx)
         
         Vcurr_prime = func_V.predict_from_lagged(exp_s_prime)[0, 0] # Scalar
         if exp_terminal:
@@ -116,10 +109,12 @@ for i_episode in range(n_episodes):
           pi = func_pi.predict(exp_s_prime) # 1 x n_actions
           Vtr = deepcopy(Vcurr_prime)
           
-        # n-step off-policy TD
+        # n-step TD (on-policy for i_exp=0, off-policy otherwise)
         for i in reversed(range(exp_k)):
           
           pi = func_pi.predict(exp_s[i:i+1, :]) # 1 x n_actions
+          
+          # Importance sampling
           rho = pi/exp_mu[i:i+1, :] # 1 x n_actions
           rho_bar = np.min((1, rho[0, exp_a[i, 0]])) # scalar
           Vcurr = func_V.predict_from_lagged(exp_s[i:i+1, :])[0, 0] # scalar
@@ -132,12 +127,15 @@ for i_episode in range(n_episodes):
           
           func_pi.accumulate_training_data(exp_s[i, :], actor_train_y, entropy_coeff)
           
+          # Recursive V-trace targets for c = rho
           Vtr = rho_bar*(exp_r[i, 0] + gamma*Vtr) + (1 - rho_bar)*Vcurr # Scalar, Vtr at i
           
           if i_exp > 0:
-            func_V.accumulate_training_data(exp_s[i, :], Vtr*np.ones((1, 1)), exp_V[i, 0], value_clone_coeff)
+            func_V.accumulate_training_data(
+              exp_s[i, :], Vtr*np.ones((1, 1)), exp_V[i, 0], value_clone_coeff)
           else:
-            func_V.accumulate_training_data(exp_s[i, :], Vtr*np.ones((1, 1)), 0, value_clone_coeff)
+            # Set Y_clone to zero to disable cloning for on-policy
+            func_V.accumulate_training_data(exp_s[i, :], Vtr*np.ones((1, 1)), 0, value_clone_coeff) 
           
           Vcurr_prime = exp_r[i, 0] + gamma*Vcurr
     
@@ -148,11 +146,8 @@ for i_episode in range(n_episodes):
     s = s_prime
     
     # End of training episode
-    
-  ############
-  ### Test ###
-  ############
   
+  ### Test
   s = env_test.reset()
   for i_time in range(n_env_steps[i_test]):
   
@@ -168,21 +163,23 @@ for i_episode in range(n_episodes):
     
     # End of testing episode
   
-  #################
-  ### Averaging ###
-  #################
-  
+  # Averaging results
   if i_episode >= r_avg_window:
     for i_train_test in range(2):
       r_all_avg[i_train_test][i_episode] = np.mean(r_all[i_train_test][i_episode-r_avg_window:i_episode])
     
   if np.mod(i_episode+1, n_episodes_task_switch)==0:
-    print('Episode {}, env_0_r_avg {}, env_1_r_avg {}, training {}'.format(i_episode+1, r_all_avg[0][i_episode], r_all_avg[1][i_episode], i_train))
+    # Output results periodically to track progress
+    print('Episode {}, env_0_r_avg {}, env_1_r_avg {}, training {}'.format(
+      i_episode+1, r_all_avg[0][i_episode], r_all_avg[1][i_episode], i_train))
+    
+    # Save agent and scores at intervals
     with open(os.path.join('multi_task_results', 'agent_{:07d}.p'.format(i_episode+1)), 'wb') as f:
       pickle.dump([func_pi, func_V], f)
     with open(os.path.join('multi_task_results', 'residuals_{:07d}.p'.format(i_episode+1)), 'wb') as f:
       pickle.dump([r_all, r_all_avg], f)
-      
+  
+  # Save experience bank
   if np.mod(i_episode+1, 2*n_episodes_task_switch)==0:
     with open(os.path.join('multi_task_results', 'exp_bank.p'), 'wb') as f:
       pickle.dump(exp, f)
