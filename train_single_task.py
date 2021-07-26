@@ -127,8 +127,9 @@ for i_episode in range(n_episodes):
             func_V.accumulate_training_data(
               exp_s[i, :], Vtr*np.ones((1, 1)), exp_V[i, 0], value_clone_coeff)
           else:
-            # Set Y_clone to zero to disable cloning for on-policy
-            func_V.accumulate_training_data(exp_s[i, :], Vtr*np.ones((1, 1)), 0, value_clone_coeff)
+            # Set Y_clone to Vtr to disable cloning for on-policy
+            func_V.accumulate_training_data(
+              exp_s[i, :], Vtr*np.ones((1, 1)), Vtr*np.ones((1, 1)), value_clone_coeff)
           
           # Vcurr_prime = exp_r[i, 0] + gamma*Vcurr
     
